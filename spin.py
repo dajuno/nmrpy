@@ -6,8 +6,8 @@ solving bloch equation
 
 import numpy as np
 import scipy as sp
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+# import matplotlib.pyplot as plt
+# from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import ode
 import warnings
 
@@ -16,7 +16,7 @@ class spin:
 
     """ spin main class. """
 
-    def __init__(self,M0,B0,omega,gm,T1,T2):
+    def __init__(self, M0, B0, omega, gm, T1, T2):
         """ initialize
         M0      initial magnetization
         B0      static magnetic field (along $z$)
@@ -32,12 +32,10 @@ class spin:
         self.T1 = T1
         self.T2 = T2
 
-        
-
-    def pulse_seq(self):
+    def pulse_seq(self, t, ...):
         """ define RF pulse sequences """
 
-    def solve(self,backend='dopri5',nsteps=1,atol=1e-3):
+    def solve(self, backend='dopri5', nsteps=1, atol=1e-3):
         """ solve with scipy.integrate.ode
 
         backend     dopri5, vode, dop853
@@ -45,25 +43,29 @@ class spin:
         atol        required accuracy
         """
 
+        def rhs(t, y, *arg):
+            """ assemble rhs of Bloch equation
+            arg: self, B
 
-        def rhs(t,y,arg):
-            """ assemble rhs of Bloch equation 
-            
-                    effective magnetic oscil. field 
-                    relaxation terms
+            B       effective magnetic oscil. field
+            R       relaxation terms
             """
+            self = arg[0]
+            B = self.B0 + self.pulse_seq(t)
+            T2 = self.T2, T1 = self.T1, M0 = self.M0
+            R = [y[0]/T2, y[1]/T2, (y[2]-M0[2])/T1]
 
-            
+            return np.cross(y, B) + R
+
         solver = ode(rhs).set_integrator(backend, nsteps=nsteps, atol=atol)
-        solver.set_initial_value(M0, 0)
-        solver.set_f_params((X,Y))
+        solver.set_initial_value(self.M0, 0)
+        solver.set_f_params((self))
 # suppress Fortran-printed warning
         # solver._ingerator.iwork[2] = -1
         # warnings.filterwarnings("ignore", category=UserWarning)
-                
 
-########## OLD :::: DELETE BELOW ############
-
+# ######### OLD :::: DELETE BELOW ############
+"""
 def F(t,y,arg): #gm,M,B0,B1,omega):
     Beff = arg[0]
     Frelax = arg[1]
@@ -196,4 +198,4 @@ print(M.shape)
 
 # #plt.close('all')
 
-
+"""
