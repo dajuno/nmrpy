@@ -1,7 +1,17 @@
 # -*- coding: utf8 -*-
 '''
 Simulate magnetization of one group of nuclear spins
-solving bloch equation
+solving the Bloch equation within a frame of reference rotating with omega0
+
+dM/dt = -G*(B x M) + relax
+
+M: magnetization
+B: applied magnetic field, B_stat + B_rf == (B1x, B1y, B0+Bgz),
+    static B_stat = (0,0,B0+Bgz)   (Bgz: gradient in z)
+    oscill B_rf = (B1x,B1y,0)
+G: gyromagnetic constant
+relax: T1, T2 relaxation terms
+omega0: Larmor frequency omega0 = -G*B0
 '''
 
 import numpy as np
@@ -9,26 +19,26 @@ import scipy as sp
 # import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import ode
-import warnings
+import warning
 
 
 class spin:
 
     """ spin main class. """
+    # gyromagnetic constant:
+    G = 42.6e3 # Hz/Tesla
 
-    def __init__(self, M0, B0, omega, gm, T1, T2):
-        """ initialize
+    def __init__(self, M0, B0, omega, T1, T2):
+        """ constructor
         M0      initial magnetization
         B0      static magnetic field (along $z$)
-        omega   larmor frequency of spin
-        gm      gyromagnetic constant \gamma
+        omega0   larmor frequency of spin
         T1      relaxation constant of substance
         T2
         """
         self.M0 = M0
         self.B0 = B0
-        self.omega = omega
-        self.gm = gm
+        self.omega0 = omega0
         self.T1 = T1
         self.T2 = T2
 
@@ -55,7 +65,7 @@ class spin:
             T2 = self.T2, T1 = self.T1, M0 = self.M0
             R = [y[0]/T2, y[1]/T2, (y[2]-M0[2])/T1]
 
-            return np.cross(y, B) + R
+            return G*np.cross(y, B) + R
 
         solver = ode(rhs).set_integrator(backend, nsteps=nsteps, atol=atol)
         solver.set_initial_value(self.M0, 0)
@@ -63,6 +73,10 @@ class spin:
 # suppress Fortran-printed warning
         # solver._ingerator.iwork[2] = -1
         # warnings.filterwarnings("ignore", category=UserWarning)
+
+if __name__ == '__main__':
+    print("spinning..")
+
 
 # ######### OLD :::: DELETE BELOW ############
 """
