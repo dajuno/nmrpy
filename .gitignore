@@ -1,2 +1,7 @@
 *.pyc
 .*.swp
+*.pdf.zpid
+_build
+_static
+_template
+__pycache__
