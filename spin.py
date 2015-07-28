@@ -15,20 +15,19 @@ w0: Larmor frequency w0 = -G*B0
 '''
 
 import numpy as np
-import scipy as sp
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy.integrate import ode, odeint
+from scipy.integrate import ode
 # import warning
 
 
 class spin:
 
-    """ spin main class. """
+    ''' spin main class. '''
 
     def __init__(self, M0=1, B0=3, w0=0, dw=0, tend=1e-4, T1=0.200, T2=0.600,
                  Minit=[0.6, 0, 0.8]):
-        """ constructor
+        ''' constructor
         M0      equilibrium magnetization
         Minit   initial magnetization
         B0      static magnetic field (along $z$)
@@ -36,7 +35,7 @@ class spin:
         dw  frequency of rot. frame of ref.
         T1      relaxation time of substance
         T2
-        """
+        '''
     # gyromagnetic ratio of protons (¹H):
         self.g = 42.6e6  # Hz/Tesla
         self.M0 = M0
@@ -58,9 +57,9 @@ class spin:
         self.TE = TE
 
     def pulseseq(self, t):
-        """ define RF pulse sequences 
+        ''' define RF pulse sequences 
         
-        TODO: implement pulses according to [1]
+        TODO: implement pulses according to [1],[2]
             * Gradient Echo
             * Inversion Recovery
             * Spin Echo
@@ -87,7 +86,8 @@ class spin:
             
         -------
         [1] Bernstein (2004), Handbook of MRI Pulse Sequences
-        """
+        [2] Doorly (1997)
+        '''
 
         if self.ptype == '':
             p = np.array([0, 0, 0])
@@ -104,20 +104,20 @@ class spin:
         return p
 
     def solve(self, backend='vode', nsteps=1000, atol=1e-3):
-        """ solve with scipy.integrate.ode
+        ''' solve with scipy.integrate.ode
 
         backend     vode, dopri5, dop853
         nsteps
         atol        required accuracy
-        """
+        '''
 
         def rhs(t, y, self):
-            """ assemble rhs of Bloch equation
+            ''' assemble rhs of Bloch equation
             arg: self, B
 
             B       effective magnetic oscil. field
             R       relaxation terms
-            """
+            '''
             # self = arg[0]
             T2 = self.T2
             T1 = self.T1

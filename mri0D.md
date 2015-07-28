@@ -1,6 +1,6 @@
 # mri0D.py
 
-* `class spin` with attributes 
+* `class spin` or `dict` with attributes 
     * physical const. gamma, T1, T2
     * equilibrium magnetization M0
     * initial magnetization Minit (=?M0)
