@@ -50,10 +50,58 @@ class spin:
         self.T1 = T1
         self.T2 = T2
         self.Minit = Minit
+        self.ptype = ''
 
-    def pulse_seq(self, t):
-        """ define RF pulse sequences """
-        return np.array([0, 0, 0])
+    def set_pulseseq(self, ptype, TR=0, TE=0):
+        self.ptype = ptype
+        self.TR = TR
+        self.TE = TE
+
+    def pulseseq(self, t):
+        """ define RF pulse sequences 
+        
+        TODO: implement pulses according to [1]
+            * Gradient Echo
+            * Inversion Recovery
+            * Spin Echo
+
+            * Phase Constrast
+            * Echo Planar Imaging (Echo Train Pulse Seq.)
+            * Diffusion Imaging
+        
+            * what about gradients?
+            -- imaging gradients:
+            --- frequency-encoding gradients
+            --- phase-encoding gradients
+            --- slice selection gradients
+            -- motion sensitizing gradients
+            --- diffusion-weighting gradients
+            --- flow-encoding gradients
+            -- correction gradients
+            --- concomitant-field correction gradients
+            --- crusher gradients
+            --- eddy-current compensation
+            --- gradient moment nulling
+            --- spoiler gradients
+            --- twister gradients
+            
+        -------
+        [1] Bernstein (2004), Handbook of MRI Pulse Sequences
+        """
+
+        if self.ptype == '':
+            p = np.array([0, 0, 0])
+
+        elif self.ptype == 'saturation_recovery':
+            p = np.array([0, 0, 0])
+
+        elif self.ptype == 'spin_echo':
+            p = np.array([0, 0, 0])
+
+        elif self.ptype == '':
+            p = np.array([0, 0, 0])
+
+        return p
 
     def solve(self, backend='vode', nsteps=1000, atol=1e-3):
         """ solve with scipy.integrate.ode
@@ -78,7 +126,7 @@ class spin:
 
             omega = -self.w0+self.dw
             Brot = np.array([0, 0, omega/self.g])
-            B = np.array([0, 0, B0]) + self.pulse_seq(t) - Brot
+            B = np.array([0, 0, B0]) + self.pulseseq(t) - Brot
             # print(B[2])
             R = np.array([
                 y[0]/T2,
@@ -195,14 +243,16 @@ def plot_relax(t, M):
     Mt = np.sqrt(M[:, 0]**2 + M[:, 1]**2)
     ax1.plot(t, Mt)
     ax1.set_xlabel('time in ms')
-    ax1.set_ylabel('$|M_t|$')
+    ax1.set_ylabel('$|M|$')
     ax1.set_title('T1 relaxation')
     ax2.plot(t, M[:, 2])
     ax2.set_title('T2 relaxation')
 
 if __name__ == '__main__':
-    s = spin(dw=1e6, tend=1e-2, T1=2e-3, T2=6e-3)
-    t, y = s.solve(backend='dopri5', nsteps=10000, atol=1e-6)
+    # s = spin(dw=1e6, tend=1e-2, T1=2e-3, T2=6e-3)
+    s = spin(dw=0, tend=1, T1=2e-1, T2=6e-1)
+    s.set_pulseseq('saturation_recovery', TE=1, TR=5)
+    t, y = s.solve(backend='vode', nsteps=1000, atol=1e-6)
 
-    # plot_relax(t, y)
+    plot_relax(t, y)
     # plot3Dtime(t, y)
