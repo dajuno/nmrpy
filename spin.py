@@ -26,7 +26,7 @@ class spin:
 
     """ spin main class. """
 
-    def __init__(self, M0=1, B0=3, w0=0, dw=0, tend=1, T1=0.200, T2=0.600,
+    def __init__(self, M0=1, B0=3, w0=0, dw=0, tend=1e-4, T1=0.200, T2=0.600,
                  Minit=[0.6, 0, 0.8]):
         """ constructor
         M0      equilibrium magnetization
@@ -55,7 +55,7 @@ class spin:
         """ define RF pulse sequences """
         return np.array([0, 0, 0])
 
-    def solve(self, backend='vode', nsteps=100, atol=1e-3):
+    def solve(self, backend='vode', nsteps=1000, atol=1e-3):
         """ solve with scipy.integrate.ode
 
         backend     vode, dopri5, dop853
@@ -76,15 +76,16 @@ class spin:
             M0 = self.M0
             B0 = self.B0
 
-            omega = self.w0+self.dw
+            omega = -self.w0+self.dw
             Brot = np.array([0, 0, omega/self.g])
             B = np.array([0, 0, B0]) + self.pulse_seq(t) - Brot
+            # print(B[2])
             R = np.array([
                 y[0]/T2,
                 y[1]/T2,
                 (y[2]-M0)/T1
                 ])
-            print(self.g*np.cross(y, B) - R)
+            # print(self.g*np.cross(y, B) - R)
 
             return self.g*np.cross(y, B) - R
 
@@ -117,7 +118,9 @@ class spin:
                 sol.append(solver.y)
                 print("%g/%g" % (solver.t, self.tend))
 
-        return t, sol
+        self.t = np.array(t)
+        self.M = np.array(sol)
+        return self.t, self.M
 
     def relaxation(self, dt=1):
         ''' calculate and plot T1/T2 relaxation during free precession, within a
@@ -183,162 +186,23 @@ def plot3Dtime(t, M, skip=10):
         ax.plot([0, M[i, 0]], [0, M[i, 1]], [0, M[i, 2]],
                 '-<r')
         plt.draw()
-        time.sleep(0.1)
+        time.sleep(0.05)
 
 
 def plot_relax(t, M):
     plt.ion()
     fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True)
-    ax1.plot(t, M[:, 0], label='$M_x$')
-    ax1.plot(t, M[:, 1], label='$M_y$')
-    ax1.legend()
+    Mt = np.sqrt(M[:, 0]**2 + M[:, 1]**2)
+    ax1.plot(t, Mt)
     ax1.set_xlabel('time in ms')
-    ax1.set_ylabel('$M(t)$')
+    ax1.set_ylabel('$|M_t|$')
     ax1.set_title('T1 relaxation')
     ax2.plot(t, M[:, 2])
     ax2.set_title('T2 relaxation')
 
 if __name__ == '__main__':
-    s = spin(dw=100)
-    t, y = s.solve(backend='dopri5', atol=1e-3)
+    s = spin(dw=1e6, tend=1e-2, T1=2e-3, T2=6e-3)
+    t, y = s.solve(backend='dopri5', nsteps=10000, atol=1e-6)
 
     # plot_relax(t, y)
     # plot3Dtime(t, y)
-
-
-
-# ######### OLD :::: DELETE BELOW ############
-"""
-def F(t,y,arg): #gm,M,B0,B1,w):
-    Beff = arg[0]
-    Frelax = arg[1]
-    # gm = args[0]; w = args[1]; B0 = args[2]; B1 = args[3]
-    # M = y
-    # Beff = np.zeros(M.size)
-    # Beff[2] = gm*B0-w
-    # Beff[0] = gm*B1    
-    if not Frelax:
-        return np.cross(y,Beff)
-    else:
-        T2 = Frelax[0]
-        T1 = Frelax[1]
-        M0 = Frelax[2]
-        yrel = np.array([-y[0]/T2, -y[1]/T2, -(y[2]-M0)/T1])
-        return np.cross(y,Beff) + yrel
-
-
-# In[3]:
-
-t0 = 0
-t1 = 20.
-gm = 200 #.66e4            # Bloch (1946)
-B1 = 10.  # in gauss
-B0 = 5.   
-w = 100.
-w = gm*B0   # resonance !
-
-T1 = 1e1
-T2 = 5e-0
-M0 = .6
-
-Frelax = []
-Frelax = [T2,T1,M0] # T2 T1 M0
-
-Beff = np.array([gm*B1, 0, gm*B0-w])
-Bnorm = sp.linalg.norm(Beff)
-Minit = np.array([0.5, 0.0, 1.])
-
-
-# In[4]:
-
-# plt.ion()
-# fig = plt.figure()
-# ax = fig.gca(projection='3d')
-# ax.plot([M0[0]],[M0[1]],[M0[2]],'o')
-# ax.axis([-1,1,-1,1])
-# plt.draw()
-
-
-# In[5]:
-
-#plt.close('all')
-
-
-# In[ ]:
-
-#backend = 'vode'
-backend = 'dopri5'
-#backend = 'dop853'
-
-solver = ode(F).set_integrator(backend, nsteps=1,atol=1e-3)
-solver.set_initial_value(Minit, t0).set_f_params((Beff,Frelax))
-# suppress Fortran-printed warning
-solver._integrator.iwork[2] = -1
-
-sol = []
-warnings.filterwarnings("ignore", category=UserWarning)
-it = 0
-
-
-plt.ion()
-fig = plt.figure()
-ax = fig.gca(projection='3d')
-#ax.plot([M0[0]],[M0[1]],[M0[2]],'o')
-ax.axis([-1,1,-1,1])
-ax.plot([0,0],[0,0],[-1, 1],'-.k')
-ax.plot([-1,1],[0,0],[0,0],'-.k')
-ax.plot([0,0],[-1,1],[0,0],'-.k')
-ax.plot([0,Beff[0]/Bnorm],[0,Beff[1]/Bnorm],[0,Beff[2]/Bnorm],'-<r')
-
-ax.set_xlabel('x')
-ax.set_ylabel('y')
-ax.set_zlabel('z')
-
-while solver.t < t1:
-    it += 1
-    solver.integrate(t1, step=True)
-    sol.append([solver.t, solver.y])
-    if np.mod(it,100) == 0:
-        print("%g" % solver.t)
-        Mt = solver.y
-        ax.plot([0,Mt[0]],[0,Mt[1]],[0,Mt[2]], 'b.')
-        plt.draw()
-warnings.resetwarnings()
-
-
-# In[101]:
-
-Mtmp = []
-t = []
-for x in sol:
-    tmp = x
-    t.append(x[0])
-    Mtmp.append(x[1])
-t = np.array(t)
-M = np.array(Mtmp)
-print(M.shape)
-
-
-# In[104]:
-
-# plt.ion()
-# fig = plt.figure()
-# ax = fig.gca(projection='3d')
-# #ax.plot([M0[0]],[M0[1]],[M0[2]],'o')
-# ax.axis([-1,1,-1,1])
-# ax.plot(M[0::5000,0],M[0::5000,1],M[0::5000,2], 'b.-')
-# ax.plot([0,0],[0,0],[-1, 1],'-.k')
-# ax.plot([-1,1],[0,0],[0,0],'-.k')
-# ax.plot([0,0],[-1,1],[0,0],'-.k')
-
-# ax.set_xlabel('x')
-# ax.set_ylabel('y')
-# ax.set_zlabel('z')
-# plt.draw()
-
-
-# # In[89]:
-
-# #plt.close('all')
-
-"""
