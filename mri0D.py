@@ -38,15 +38,19 @@ class spin:
         self.Minit = Minit
 
 
-def pulseseq(s, t, pseq, TR=0, TE=0):
+def pulseseq(s, t, pseq, Amp, w0, TR=0, TE=0):
     ''' compute contribution to magnetic field `Beff(t)` at time `t`
     due to static gradient `Bg`, RF pulse `Brf` and/or gradient pulse `Brfg`
     return: B'(t) = Bg + Brf(t) + Brfg(t)
                   = [Bx, By, Bz]
     '''
-    if pseq = 'flip90':
-
-    Bp = np.array([0, 0, 0])
+    if pseq == 'flip90':
+        # nothing
+        print('90')
+    elif pseq == 'continuous':
+        Bp = Amp*np.array([np.cos(w0,t), -np.sin(w0,t), 0])
+    else:
+        Bp = np.array([0, 0, 0])
     return Bp
 
 
