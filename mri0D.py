@@ -9,6 +9,8 @@ M: magnetization
 B: applied magnetic field = B_0 + B_RF + B_G
 g: gyromagnetic ratio
 relax: T1, T2 relaxation terms
+
+TODO: nsteps -> dt or nsteps_glob
 '''
 
 import numpy as np
@@ -62,9 +64,28 @@ def pulseseq(t, s, params):
         else:
             Bp = np.array([0, 0, 0])
     elif pseq == 'spinecho':
-        tp = np.pi/(2*B1*s.gm)  # TODO HERE
+        ''' - one pulse of length tp flips M by pi/2
+            - magnetization is dephased due to field inhomogeinities
+            - refocus pulse after \tau -> pi flip
+            - phase coherence restored after 2\tau
+            cf. Slichter
+        '''
+        # pulse duration pi flip
+        tp = np.pi/(2*B1*s.gm)  
+        # arbitrary dephasing
+        # let's say pi/6 during 2tp
+        dt = 2*tp
+        dphi = np.pi/6
+        dB = dphi/s.gm/dt
+
         if t < tp:  # np.mod(t, TI) >= TR:  # echo!
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        elif t < tp+dt:  # dephase!
+            Bp = np.array([0, 0, -dB])
+        elif t < 3*tp+dt:  # 180 flip
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        elif t < 3*tp+2*dt:  # more dephasing
+            Bp = np.array([0, 0, -dB])
         else:
             Bp = np.array([0, 0, 0])
     else:
@@ -154,14 +175,12 @@ if __name__ == '__main__':
     B0 = 3
     s = spin()
     w0 = s.gm*B0
-
+    
+    # B1 = 1.75e-5 taken from Yuan1987
     pulse = {'TE': 20, 'TR': 50, 'amp': 1.75e-5, 'pseq': 'spinecho'}
-    # t, M = bloch(s, tend=1e-2, backend='vode', pulse_params=pulse, dw_rot=0,
-    #              atol=1e-6, nsteps=1e5, B0=B0)
-    s = spin(Minit=[0.7, 0, 0.8])
-# laboratory frame (insane)
-    t, M = bloch(s, backend='vode', tend=0.01, nsteps=1e5,
-                 pulse_params=pulse, dw_rot=None, atol=1e-3, B0=3)
+    t, M = bloch(s, tend=0.015, backend='vode', pulse_params=pulse, dw_rot=0,
+                 atol=1e-6, nsteps=1e5, B0=B0)
+
 
 # *** EXAMPLE:  continuous excitation, M -> 2pi turn
     # pulse = {'TE': 20, 'TR': 50, 'amp': 1, 'pseq': 'continuous'}
