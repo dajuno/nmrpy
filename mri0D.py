@@ -99,33 +99,19 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
         return s.gm*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
-    if backend == 'vode':
-        sol = []
-        t = []
-        dt = tend/nsteps
-        solver = ode(rhs).set_integrator('vode', atol=atol)
-        solver.set_initial_value(s.Minit, 0)
-        solver.set_f_params(s, pulse_params, B0, w0, dw_rot)
-        while solver.successful() and solver.t < tend:
-            # solver.integrate(tend, step=True)
-            solver.integrate(solver.t+dt)
-            t.append(solver.t)
-            sol.append(solver.y)
-            print("%g/%g" % (solver.t, tend))
-    elif backend == 'dopri5':
-        ''' VAR 2 ## automatic step size with time grid '''
-        sol = []
-        t = []
-        # t = np.linspace(0, self.tend, nsteps)
-        dt = tend/nsteps
-        solver = ode(rhs).set_integrator('dopri5', atol=atol)
-        solver.set_initial_value(s.Minit, 0)
-        solver.set_f_params(s, pulse_params, B0, w0, dw_rot)
-        while solver.successful() and solver.t < tend:
-            solver.integrate(solver.t+dt)
-            t.append(solver.t)
-            sol.append(solver.y)
-            print("%g/%g" % (solver.t, tend))
+    sol = []
+    t = []
+    dt = tend/nsteps
+    solver = ode(rhs).set_integrator(backend, atol=atol)
+    solver.set_initial_value(s.Minit, 0)
+    solver.set_f_params(s, pulse_params, B0, w0, dw_rot)
+    while solver.successful() and solver.t < tend:
+        # works only with vode!! not recommended:
+        # solver.integrate(tend, step=True)
+        solver.integrate(solver.t+dt)
+        t.append(solver.t)
+        sol.append(solver.y)
+        print("%g/%g" % (solver.t, tend))
 
     return np.array(t), np.array(sol)
 
@@ -163,13 +149,11 @@ def plot_relax(t, M):
 
 
 if __name__ == '__main__':
-    # s = spin
-    # t, y = s.solve(backend='vode', nsteps=1000, atol=1e-6)
+
     pulse = {'TE': 20, 'TR': 50, 'amp': 1, 'pseq': 'continuous'}
-    # s = spin(Minit=[0.7, 0, 0.8])
-    s = spin()
-    t, M = bloch(s, backend='vode', pulse_params=pulse, dw_rot=0,
-                 atol=1e-3, nsteps=1e3, B0=3)
+    # s = spin()
+    # t, M = bloch(s, backend='vode', pulse_params=pulse, dw_rot=0,
+    #              atol=1e-3, nsteps=1e3, B0=3)
 
 # *** EXAMPLE: free precession, relaxed
     pulse = {'pseq': 'none'}
@@ -178,7 +162,7 @@ if __name__ == '__main__':
     # t, M = bloch(s, backend='dopri5', tend=0.01, nsteps=1e4,
     #              pulse_params=pulse, dw_rot=None, atol=1e-3, B0=3)
 # rotating reference frame (sensible)
-    t, M = bloch(s, backend='vode', nsteps=1e3, pulse_params=pulse,
+    t, M = bloch(s, backend='dopri5', nsteps=1e3, pulse_params=pulse,
                  dw_rot=100, atol=1e-6, B0=3)
 
 # ** BENCHMARK **  dopri5 (RK45): 1 loops, best of 3: 346 ms per loop
