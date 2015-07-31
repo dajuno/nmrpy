@@ -38,7 +38,7 @@ class spin:
         self.Minit = Minit
 
 
-def pulseseq(t, params):
+def pulseseq(t, s, params):
     ''' compute contribution to magnetic field `Beff(t)` at time `t`
     due to static gradient `Bg`, RF pulse `Brf` and/or gradient pulse `Brfg`
     return: B'(t) = Bg + Brf(t) + Brfg(t)
@@ -62,8 +62,8 @@ def pulseseq(t, params):
         else:
             Bp = np.array([0, 0, 0])
     elif pseq == 'spinecho':
-        TE = 0 # TODO HERE
-        if np.mod(t, TI) >= TR:  # echo!
+        tp = np.pi/(2*B1*s.gm)  # TODO HERE
+        if t < tp:  # np.mod(t, TI) >= TR:  # echo!
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
         else:
             Bp = np.array([0, 0, 0])
@@ -85,17 +85,17 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
 # RF freq in rotating frame of reference is  `w - w_fr`,
 # so just the "off resonance" freq (=w_0-w_rf) plus the
 # difference in frequency between wf_fr and w_0
-    if dw_rot == None:
+    if dw_rot is None:
         dw_rot = -w0
     pulse_params['w0'] = dw_rot + dw_rf
     print(w0)
 
     def rhs(t, y, s, pulse_params, B0, w0, dw_rot):
         B = np.array([0, 0, B0])                # static
-        B = B + pulseseq(t, pulse_params)    # RF
+        B = B + pulseseq(t, s, pulse_params)    # RF
         B = B + np.array([0, 0, (w0+dw_rot)/s.gm])  # rotating frame with w+dw
-        # print(B)
         R = np.array([y[0]/s.T2, y[1]/s.T2, (y[2]-s.M0)/s.T1])  # relax
+        # print(s.gm*np.cross(y, B))
         return s.gm*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
@@ -129,9 +129,11 @@ def plot3Dtime(t, M, skip=10):
     ax.set_ylabel('y')
     ax.set_zlabel('z')
 
-    for i in range(len(t[::skip])):
+    for i in range(0, len(t), skip):
+        print(i)
         ax.plot([0, M[i, 0]], [0, M[i, 1]], [0, M[i, 2]],
                 '-<r')
+        # print('t = %g s' % t[i])
         plt.draw()
         time.sleep(0.05)
 
@@ -149,21 +151,33 @@ def plot_relax(t, M):
 
 
 if __name__ == '__main__':
+    B0 = 3
+    s = spin()
+    w0 = s.gm*B0
 
-    pulse = {'TE': 20, 'TR': 50, 'amp': 1, 'pseq': 'continuous'}
-    # s = spin()
-    # t, M = bloch(s, backend='vode', pulse_params=pulse, dw_rot=0,
-    #              atol=1e-3, nsteps=1e3, B0=3)
+    pulse = {'TE': 20, 'TR': 50, 'amp': 1.75e-5, 'pseq': 'spinecho'}
+    # t, M = bloch(s, tend=1e-2, backend='vode', pulse_params=pulse, dw_rot=0,
+    #              atol=1e-6, nsteps=1e5, B0=B0)
+    s = spin(Minit=[0.7, 0, 0.8])
+# laboratory frame (insane)
+    t, M = bloch(s, backend='vode', tend=0.01, nsteps=1e5,
+                 pulse_params=pulse, dw_rot=None, atol=1e-3, B0=3)
+
+# *** EXAMPLE:  continuous excitation, M -> 2pi turn
+    # pulse = {'TE': 20, 'TR': 50, 'amp': 1, 'pseq': 'continuous'}
+    # t1 = 2*np.pi/s.gm/1
+    # t, M = bloch(s, tend=t1, backend='vode', pulse_params=pulse, dw_rot=0,
+    #              atol=1e-6, nsteps=1e3, B0=B0)
 
 # *** EXAMPLE: free precession, relaxed
-    pulse = {'pseq': 'none'}
-    s = spin(Minit=[0.7, 0, 0.8])
+    # pulse = {'pseq': 'none'}
+    # s = spin(Minit=[0.7, 0, 0.8])
 # laboratory frame (insane)
     # t, M = bloch(s, backend='dopri5', tend=0.01, nsteps=1e4,
     #              pulse_params=pulse, dw_rot=None, atol=1e-3, B0=3)
 # rotating reference frame (sensible)
-    t, M = bloch(s, backend='dopri5', nsteps=1e3, pulse_params=pulse,
-                 dw_rot=100, atol=1e-6, B0=3)
+    # t, M = bloch(s, backend='vode', nsteps=1e3, pulse_params=pulse,
+    #              dw_rot=100, atol=1e-6, B0=3)
 
 # ** BENCHMARK **  dopri5 (RK45): 1 loops, best of 3: 346 ms per loop
 #                    vode (ABF): 10 loops, best of 3: 77.1 ms per loop
