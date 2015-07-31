@@ -44,7 +44,7 @@ def pulseseq(t, params):
     return: B'(t) = Bg + Brf(t) + Brfg(t)
                   = [Bx, By, Bz]
     '''
-    Amp = params.get('amp')
+    B1 = params.get('amp')
     w0 = params.get('w0')
     TR = params.get('TR')
     TE = params.get('TE')
@@ -54,8 +54,19 @@ def pulseseq(t, params):
         # nothing
         print('90')
     elif pseq == 'continuous':
-        if CONTINUE HERE
         Bp = B1*np.array([np.cos(w0*t), 0, 0])
+    elif pseq == 'pulsed':
+        TI = TR+TE
+        if np.mod(t, TI) >= TR:  # echo!
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        else:
+            Bp = np.array([0, 0, 0])
+    elif pseq == 'spinecho':
+        TE = 0 # TODO HERE
+        if np.mod(t, TI) >= TR:  # echo!
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        else:
+            Bp = np.array([0, 0, 0])
     else:
         Bp = np.array([0, 0, 0])
     return Bp
@@ -63,27 +74,41 @@ def pulseseq(t, params):
 
 def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
           B0=3, dw_rot=0, dw_rf=0, atol=1e-6):
-    ''' solve Bloch equations for spin `s` '''
+    ''' solve Bloch equations for spin `s` in the ROTATING FRAME OF REFERENCE
+        rotating with the Larmor frequency plus a shift `dw_rot` (default: 0)
+        setting dw_rot = None (-> -w0) corresponds to the laboratory frame.
+
+        dw_fr: frequency shift for off resonance excitation
+    '''
 
     w0 = -s.gm*B0
-    pulse_params['w0'] = w0 + dw_rf
+# RF freq in rotating frame of reference is  `w - w_fr`,
+# so just the "off resonance" freq (=w_0-w_rf) plus the
+# difference in frequency between wf_fr and w_0
+    if dw_rot == None:
+        dw_rot = -w0
+    pulse_params['w0'] = dw_rot + dw_rf
+    print(w0)
 
     def rhs(t, y, s, pulse_params, B0, w0, dw_rot):
         B = np.array([0, 0, B0])                # static
-        B += pulseseq(t, pulse_params)    # RF
-        B += np.array([0, 0, (w0+dw_rot)/s.gm])   # rotating frame with `w+dw`
-        R = np.array([y[0]/s.T2, y[1]/s.T2, y[2]-s.M0])  # relax
+        B = B + pulseseq(t, pulse_params)    # RF
+        B = B + np.array([0, 0, (w0+dw_rot)/s.gm])  # rotating frame with w+dw
+        # print(B)
+        R = np.array([y[0]/s.T2, y[1]/s.T2, (y[2]-s.M0)/s.T1])  # relax
         return s.gm*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
     if backend == 'vode':
         sol = []
         t = []
+        dt = tend/nsteps
         solver = ode(rhs).set_integrator('vode', atol=atol)
         solver.set_initial_value(s.Minit, 0)
         solver.set_f_params(s, pulse_params, B0, w0, dw_rot)
         while solver.successful() and solver.t < tend:
-            solver.integrate(tend, step=True)
+            # solver.integrate(tend, step=True)
+            solver.integrate(solver.t+dt)
             t.append(solver.t)
             sol.append(solver.y)
             print("%g/%g" % (solver.t, tend))
@@ -138,8 +163,27 @@ def plot_relax(t, M):
 
 
 if __name__ == '__main__':
-    s = spin
-    t, y = s.solve(backend='vode', nsteps=1000, atol=1e-6)
+    # s = spin
+    # t, y = s.solve(backend='vode', nsteps=1000, atol=1e-6)
+    pulse = {'TE': 20, 'TR': 50, 'amp': 1, 'pseq': 'continuous'}
+    # s = spin(Minit=[0.7, 0, 0.8])
+    s = spin()
+    t, M = bloch(s, backend='vode', pulse_params=pulse, dw_rot=0,
+                 atol=1e-3, nsteps=1e3, B0=3)
+
+# *** EXAMPLE: free precession, relaxed
+    pulse = {'pseq': 'none'}
+    s = spin(Minit=[0.7, 0, 0.8])
+# laboratory frame (insane)
+    # t, M = bloch(s, backend='dopri5', tend=0.01, nsteps=1e4,
+    #              pulse_params=pulse, dw_rot=None, atol=1e-3, B0=3)
+# rotating reference frame (sensible)
+    t, M = bloch(s, backend='vode', nsteps=1e3, pulse_params=pulse,
+                 dw_rot=100, atol=1e-6, B0=3)
+
+# ** BENCHMARK **  dopri5 (RK45): 1 loops, best of 3: 346 ms per loop
+#                    vode (ABF): 10 loops, best of 3: 77.1 ms per loop
+#       command: %timeit %run mri0D.py
 
     # plot_relax(t, y)
-    plot3Dtime(t, y)
+    # plot3Dtime(t, y)
