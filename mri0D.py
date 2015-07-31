@@ -40,7 +40,7 @@ class spin:
         self.Minit = Minit
 
 
-def pulseseq(t, s, params):
+def pulseseq(t, s, params, it):
     ''' compute contribution to magnetic field `Beff(t)` at time `t`
     due to static gradient `Bg`, RF pulse `Brf` and/or gradient pulse `Brfg`
     return: B'(t) = Bg + Brf(t) + Brfg(t)
@@ -51,6 +51,8 @@ def pulseseq(t, s, params):
     TR = params.get('TR')
     TE = params.get('TE')
     pseq = params.get('pseq')
+    dphi = params.get('dephase')  # dephase angle in rad: by how much will
+#    magnetization be dephased between P1 and P2 ?
 
     if pseq == 'flip90':
         # nothing
@@ -58,36 +60,36 @@ def pulseseq(t, s, params):
     elif pseq == 'continuous':
         Bp = B1*np.array([np.cos(w0*t), 0, 0])
     elif pseq == 'pulsed':
-        TI = TR+TE
-        if np.mod(t, TI) >= TR:  # echo!
+        if np.mod(t, TR) < TE:  # echo!
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
         else:
             Bp = np.array([0, 0, 0])
     elif pseq == 'spinecho':
         ''' - one pulse of length tp flips M by pi/2
             - magnetization is dephased due to field inhomogeinities
+                    (specify angle in rad!!)
             - refocus pulse after \tau -> pi flip
             - phase coherence restored after 2\tau
             cf. Slichter
         '''
         # pulse duration pi flip
-        tp = np.pi/(2*B1*s.gm)  
+        tp = np.pi/(2*B1*s.gm)
         # arbitrary dephasing
         # let's say pi/6 during 2tp
-        dt = 2*tp
-        dphi = np.pi/6
-        dB = dphi/s.gm/dt
-
-        if t < tp:  # np.mod(t, TI) >= TR:  # echo!
-            Bp = B1*np.array([np.cos(w0*t), 0, 0])
-        elif t < tp+dt:  # dephase!
-            Bp = np.array([0, 0, -dB])
-        elif t < 3*tp+dt:  # 180 flip
-            Bp = B1*np.array([np.cos(w0*t), 0, 0])
-        elif t < 3*tp+2*dt:  # more dephasing
-            Bp = np.array([0, 0, -dB])
+        dt = TE/2-tp
+        if dphi > 0:
+            dB = dphi/s.gm/dt
         else:
-            Bp = np.array([0, 0, 0])
+            dB = 0
+
+        if np.mod(t, TR) <= tp:  # np.mod(t, TI) >= TR:  # echo!
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        elif np.mod(t, TR) <= TE/2:  # dephase!
+            Bp = np.array([0, 0, -dB])
+        elif np.mod(t, TR) <= TE/2+2*tp:  # 180 flip
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        else:
+            Bp = np.array([0, 0, -dB])
     else:
         Bp = np.array([0, 0, 0])
     return Bp
@@ -111,27 +113,29 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     pulse_params['w0'] = dw_rot + dw_rf
     print(w0)
 
-    def rhs(t, y, s, pulse_params, B0, w0, dw_rot):
+    def rhs(t, y, s, pulse_params, B0, w0, dw_rot, it):
         B = np.array([0, 0, B0])                # static
-        B = B + pulseseq(t, s, pulse_params)    # RF
+        B = B + pulseseq(t, s, pulse_params, it)    # RF
         B = B + np.array([0, 0, (w0+dw_rot)/s.gm])  # rotating frame with w+dw
         R = np.array([y[0]/s.T2, y[1]/s.T2, (y[2]-s.M0)/s.T1])  # relax
         # print(s.gm*np.cross(y, B))
         return s.gm*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
+    it = 1
     sol = []
     t = []
     dt = tend/nsteps
     solver = ode(rhs).set_integrator(backend, atol=atol)
     solver.set_initial_value(s.Minit, 0)
-    solver.set_f_params(s, pulse_params, B0, w0, dw_rot)
+    solver.set_f_params(s, pulse_params, B0, w0, dw_rot, it)
     while solver.successful() and solver.t < tend:
         # works only with vode!! not recommended:
         # solver.integrate(tend, step=True)
         solver.integrate(solver.t+dt)
         t.append(solver.t)
         sol.append(solver.y)
+        it = it + 1
         print("%g/%g" % (solver.t, tend))
 
     return np.array(t), np.array(sol)
@@ -151,10 +155,9 @@ def plot3Dtime(t, M, skip=10):
     ax.set_zlabel('z')
 
     for i in range(0, len(t), skip):
-        print(i)
         ax.plot([0, M[i, 0]], [0, M[i, 1]], [0, M[i, 2]],
                 '-<r')
-        # print('t = %g s' % t[i])
+        print('%i \t t = %g s' % (i, t[i]))
         plt.draw()
         time.sleep(0.05)
 
@@ -171,15 +174,45 @@ def plot_relax(t, M):
     ax2.set_title('T2 relaxation')
 
 
+def plot_pulse(t, M, params, s):
+    plt.ion()
+    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+
+    # plot magnetization components
+    ax1.plot(t, M)
+    plt.legend(('$M_x$', '$M_y$', '$M_z$'))
+    ax1.set_xlabel('time in ms')
+    ax1.set_ylabel('$M$')
+    ax1.set_title('Magnetization')
+
+    # plot pulse train
+    TE = params.get('TE')
+    TR = params.get('TR')
+    B1 = params.get('amp')
+    N = int(t[-1]/TR)   # number of periods
+    tp = np.pi/(2*B1*s.gm)
+    # draw polygone of one period:
+    p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
+    tp1 = np.array([0, 0, tp, tp, TE/2, TE/2, TE/2+2*tp, TE/2+2*tp, TR])
+    p, tp = [], []
+    for i in range(N):
+        tp.extend(tp1+i*TR)
+        p.extend(p1)
+
+    ax2.plot(tp, p)
+    ax2.set_ylim([-0.2, 1.2])
+    plt.draw()
+
 if __name__ == '__main__':
     B0 = 3
-    s = spin()
+    s = spin(T1=0.03, T2=0.6)
     w0 = s.gm*B0
-    
+
     # B1 = 1.75e-5 taken from Yuan1987
-    pulse = {'TE': 20, 'TR': 50, 'amp': 1.75e-5, 'pseq': 'spinecho'}
-    t, M = bloch(s, tend=0.015, backend='vode', pulse_params=pulse, dw_rot=0,
-                 atol=1e-6, nsteps=1e5, B0=B0)
+    pulse = {'TE': 0.005, 'TR': 0.050, 'amp': 1.75e-5, 'pseq': 'spinecho',
+             'dephase': 0} # np.pi/6}
+    t, M = bloch(s, tend=0.2, backend='vode', pulse_params=pulse, dw_rot=0,
+                 dw_rf=1000, atol=1e-6, nsteps=1e4, B0=B0)
 
 
 # *** EXAMPLE:  continuous excitation, M -> 2pi turn
