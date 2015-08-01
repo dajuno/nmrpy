@@ -10,8 +10,8 @@ B: applied magnetic field = B_0 + B_RF + B_G
 g: gyromagnetic ratio
 relax: T1, T2 relaxation terms
 
-TODO: nsteps -> dt or nsteps_glob
-'''
+TODO: spin echo sequence: 90y - TE/2 - 180x - TE - 180x - ..
+''' 
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -85,8 +85,8 @@ def pulseseq(t, s, params, it):
         else:
             dB = 0
 
-        if np.mod(t, TR) <= tp:  # 90° flip, x
-            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+        if np.mod(t, TR) <= tp:  # 90° flip, y
+            Bp = B1*np.array([0, np.cos(w0*t), 0])
         elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
         elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip, x
@@ -199,7 +199,7 @@ def plot_pulse(t, M, params, s):
     tp = np.pi/(2*B1*s['gm'])
     # draw polygone of one period:
     p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
-    tp1 = np.array([0, 0, tp, tp, TE/2, TE/2, TE/2+2*tp, TE/2+2*tp, TR])
+    tp1 = np.array([0, 0, tp, tp, tp+TE/2, tp+TE/2, TE/2+3*tp, TE/2+3*tp, TR])
     p, tp = [], []
     for i in range(N):
         tp.extend(tp1+i*TR)
@@ -214,23 +214,23 @@ if __name__ == '__main__':
 # spin dict
     s = {
         'M0': 1,
-        'T1': 0.0200,
-        'T2': 0.0600,
+        'T1': 0.100,
+        'T2': 0.600,
         'Minit': [0, 0, 1],
         'gm': 42.6e6
         }
 # pulse dict
     pulse = {
-        'TE': 0.010,
-        'TR': 0.050,
+        'TE': 0.050,
+        'TR': 0.500,
         'amp': 1.75e-5,          # B1 = 1.75e-5 taken from Yuan1987
         'pseq': 'spinecho',
-        'dephase': 0             # np.pi/6
+        'dephase': 0.1             # np.pi/6
         }
     w0 = s['gm']*B0
 
-    t, M = bloch(s, tend=0.2, backend='vode', pulse_params=pulse, dw_rot=0,
-                 dw_rf=0, atol=1e-6, nsteps=1e4, B0=B0)
+    t, M = bloch(s, tend=0.5, backend='dopri5', pulse_params=pulse, dw_rot=10,
+                 dw_rf=0, atol=1e-6, nsteps=1e5, B0=B0)
 
 
 # *** EXAMPLE:  continuous excitation, M -> 2pi turn
