@@ -20,24 +20,24 @@ from scipy.integrate import ode
 # import warning
 
 
-class spin:
+# class spin:
 
-    ''' spin class
-        (add some methods later?) '''
+#     ''' spin class
+#         (add some methods later?) '''
 
-    def __init__(self, M0=1, T1=0.200, T2=0.600, Minit=[0, 0, 1]):
-        ''' constructor
-        M0      equilibrium magnetization
-        Minit   initial magnetization
-        T1      relaxation time of substance
-        T2
-        '''
-    # gyromagnetic ratio of protons (¹H):
-        self.gm = 42.6e6  # Hz/Tesla
-        self.M0 = 1
-        self.T1 = T1
-        self.T2 = T2
-        self.Minit = Minit
+#     def __init__(self, M0=1, T1=0.200, T2=0.600, Minit=[0, 0, 1]):
+#         ''' constructor
+#         M0      equilibrium magnetization
+#         Minit   initial magnetization
+#         T1      relaxation time of substance
+#         T2
+#         '''
+#     # gyromagnetic ratio of protons (¹H):
+#         self.gm = 42.6e6  # Hz/Tesla
+#         self.M0 = 1
+#         self.T1 = T1
+#         self.T2 = T2
+#         self.Minit = Minit
 
 
 def pulseseq(t, s, params, it):
@@ -64,6 +64,7 @@ def pulseseq(t, s, params, it):
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
         else:
             Bp = np.array([0, 0, 0])
+
     elif pseq == 'spinecho':
         ''' - one pulse of length tp flips M by pi/2
             - magnetization is dephased due to field inhomogeinities
@@ -73,12 +74,12 @@ def pulseseq(t, s, params, it):
             cf. Slichter
         '''
         # pulse duration pi flip
-        tp = np.pi/(2*B1*s.gm)
+        tp = np.pi/(2*B1*s['gm'])
         # arbitrary dephasing
         # let's say pi/6 during 2tp
         dt = TE/2-tp
         if dphi > 0:
-            dB = dphi/s.gm/dt
+            dB = dphi/s['gm']/dt
         else:
             dB = 0
 
@@ -104,7 +105,7 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
         dw_fr: frequency shift for off resonance excitation
     '''
 
-    w0 = -s.gm*B0
+    w0 = -s['gm']*B0
 # RF freq in rotating frame of reference is  `w - w_fr`,
 # so just the "off resonance" freq (=w_0-w_rf) plus the
 # difference in frequency between wf_fr and w_0
@@ -116,10 +117,10 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     def rhs(t, y, s, pulse_params, B0, w0, dw_rot, it):
         B = np.array([0, 0, B0])                # static
         B = B + pulseseq(t, s, pulse_params, it)    # RF
-        B = B + np.array([0, 0, (w0+dw_rot)/s.gm])  # rotating frame with w+dw
-        R = np.array([y[0]/s.T2, y[1]/s.T2, (y[2]-s.M0)/s.T1])  # relax
-        # print(s.gm*np.cross(y, B))
-        return s.gm*np.cross(y, B) - R
+        B = B + np.array([0, 0, (w0+dw_rot)/s['gm']])  # rotating frame with w+dw
+        R = np.array([y[0]/s['T2'], y[1]/s['T2'], (y[2]-s['M0'])/s['T1']])  # relax
+        # print(s['gm']*np.cross(y, B))
+        return s['gm']*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
     it = 1
@@ -127,7 +128,7 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     t = []
     dt = tend/nsteps
     solver = ode(rhs).set_integrator(backend, atol=atol)
-    solver.set_initial_value(s.Minit, 0)
+    solver.set_initial_value(s['Minit'], 0)
     solver.set_f_params(s, pulse_params, B0, w0, dw_rot, it)
     while solver.successful() and solver.t < tend:
         # works only with vode!! not recommended:
@@ -205,14 +206,26 @@ def plot_pulse(t, M, params, s):
 
 if __name__ == '__main__':
     B0 = 3
-    s = spin(T1=0.03, T2=0.6)
-    w0 = s.gm*B0
+# spin dict
+    s = {
+        'M0': 1,
+        'T1': 0.200,
+        'T2': 0.600,
+        'Minit': [0, 0, 1],
+        'gm': 42.6e6
+        }
+# pulse dict
+    pulse = {
+        'TE': 0.010,
+        'TR': 0.050,
+        'amp': 1.75e-5,          # B1 = 1.75e-5 taken from Yuan1987
+        'pseq': 'spinecho',
+        'dephase': 0             # np.pi/6
+        }
+    w0 = s['gm']*B0
 
-    # B1 = 1.75e-5 taken from Yuan1987
-    pulse = {'TE': 0.005, 'TR': 0.050, 'amp': 1.75e-5, 'pseq': 'spinecho',
-             'dephase': 0} # np.pi/6}
     t, M = bloch(s, tend=0.2, backend='vode', pulse_params=pulse, dw_rot=0,
-                 dw_rf=1000, atol=1e-6, nsteps=1e4, B0=B0)
+                 dw_rf=0, atol=1e-6, nsteps=1e4, B0=B0)
 
 
 # *** EXAMPLE:  continuous excitation, M -> 2pi turn
