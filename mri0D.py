@@ -17,6 +17,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import ode
+import sys
+from utils import progressbar
 # import warning
 
 
@@ -137,7 +139,8 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
         t.append(solver.t)
         sol.append(solver.y)
         it = it + 1
-        print("%g/%g" % (solver.t, tend))
+        progressbar(solver.t, tend, 'solve')
+        # print("%g/%g" % (solver.t, tend))
 
     return np.array(t), np.array(sol)
 
@@ -158,7 +161,8 @@ def plot3Dtime(t, M, skip=10):
     for i in range(0, len(t), skip):
         ax.plot([0, M[i, 0]], [0, M[i, 1]], [0, M[i, 2]],
                 '-<r')
-        print('%i \t t = %g s' % (i, t[i]))
+        # print('%i \t t = %g s' % (i, t[i]))
+        progressbar(t[i], t.max(), s='plot')
         plt.draw()
         time.sleep(0.05)
 
@@ -181,17 +185,18 @@ def plot_pulse(t, M, params, s):
 
     # plot magnetization components
     ax1.plot(t, M)
-    plt.legend(('$M_x$', '$M_y$', '$M_z$'))
+    ax1.legend(('$M_x$', '$M_y$', '$M_z$'))
     ax1.set_xlabel('time in ms')
     ax1.set_ylabel('$M$')
     ax1.set_title('Magnetization')
+    plt.draw()
 
     # plot pulse train
     TE = params.get('TE')
     TR = params.get('TR')
     B1 = params.get('amp')
     N = int(t[-1]/TR)   # number of periods
-    tp = np.pi/(2*B1*s.gm)
+    tp = np.pi/(2*B1*s['gm'])
     # draw polygone of one period:
     p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
     tp1 = np.array([0, 0, tp, tp, TE/2, TE/2, TE/2+2*tp, TE/2+2*tp, TR])
@@ -209,8 +214,8 @@ if __name__ == '__main__':
 # spin dict
     s = {
         'M0': 1,
-        'T1': 0.200,
-        'T2': 0.600,
+        'T1': 0.0200,
+        'T2': 0.0600,
         'Minit': [0, 0, 1],
         'gm': 42.6e6
         }
