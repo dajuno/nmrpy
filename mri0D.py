@@ -79,17 +79,17 @@ def pulseseq(t, s, params, it):
         tp = np.pi/(2*B1*s['gm'])
         # arbitrary dephasing
         # let's say pi/6 during 2tp
-        dt = TE/2-tp
+        dt = TE/2
         if dphi > 0:
             dB = dphi/s['gm']/dt
         else:
             dB = 0
 
-        if np.mod(t, TR) <= tp:  # np.mod(t, TI) >= TR:  # echo!
+        if np.mod(t, TR) <= tp:  # 90° flip, x
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
-        elif np.mod(t, TR) <= TE/2:  # dephase!
+        elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
-        elif np.mod(t, TR) <= TE/2+2*tp:  # 180 flip
+        elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip, x
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
         else:
             Bp = np.array([0, 0, -dB])
