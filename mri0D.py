@@ -8,16 +8,17 @@ dM/dt = g*(M x B) + relax
 M: magnetization
 B: applied magnetic field = B_0 + B_RF + B_G
 g: gyromagnetic ratio
-relax: T1, T2 relaxation terms
+relax: T1, T2 relaxation terms '''
 
-TODO: spin echo sequence: 90y - TE/2 - 180x - TE - 180x - ..
-''' 
+# TODO: [ ]  spin echo sequence: 90y - TE/2 - 180x - TE - 180x - ..
+#       [ ]  compute MRI signal
+#       [ ]  compare to analytical solution
+#       [ ]            and matrix formulism
 
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import ode
-import sys
 from utils import progressbar
 # import warning
 
@@ -85,11 +86,11 @@ def pulseseq(t, s, params, it):
         else:
             dB = 0
 
-        if np.mod(t, TR) <= tp:  # 90° flip, y
-            Bp = B1*np.array([0, np.cos(w0*t), 0])
+        if np.mod(t, TR) <= tp:  # 90° flip
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
         elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
-        elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip, x
+        elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
             Bp = B1*np.array([np.cos(w0*t), 0, 0])
         else:
             Bp = np.array([0, 0, -dB])
@@ -99,7 +100,7 @@ def pulseseq(t, s, params, it):
 
 
 def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
-          B0=3, dw_rot=0, dw_rf=0, atol=1e-6):
+          B0=3, dw_rot=0, dw_rf=0, rtol=1e-6):
     ''' solve Bloch equations for spin `s` in the ROTATING FRAME OF REFERENCE
         rotating with the Larmor frequency plus a shift `dw_rot` (default: 0)
         setting dw_rot = None (-> -w0) corresponds to the laboratory frame.
@@ -129,7 +130,7 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     sol = []
     t = []
     dt = tend/nsteps
-    solver = ode(rhs).set_integrator(backend, atol=atol)
+    solver = ode(rhs).set_integrator(backend, rtol=rtol)
     solver.set_initial_value(s['Minit'], 0)
     solver.set_f_params(s, pulse_params, B0, w0, dw_rot, it)
     while solver.successful() and solver.t < tend:
@@ -195,7 +196,7 @@ def plot_pulse(t, M, params, s):
     TE = params.get('TE')
     TR = params.get('TR')
     B1 = params.get('amp')
-    N = int(t[-1]/TR)   # number of periods
+    N = int(np.ceil(t[-1]/TR))   # number of periods
     tp = np.pi/(2*B1*s['gm'])
     # draw polygone of one period:
     p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
@@ -207,6 +208,7 @@ def plot_pulse(t, M, params, s):
 
     ax2.plot(tp, p)
     ax2.set_ylim([-0.2, 1.2])
+    ax1.set_xlim([0, t.max()])
     plt.draw()
 
 if __name__ == '__main__':
@@ -222,32 +224,40 @@ if __name__ == '__main__':
 # pulse dict
     pulse = {
         'TE': 0.050,
-        'TR': 0.500,
+        'TR': 1.000,
         'amp': 1.75e-5,          # B1 = 1.75e-5 taken from Yuan1987
         'pseq': 'spinecho',
         'dephase': 0.1             # np.pi/6
         }
     w0 = s['gm']*B0
 
-    t, M = bloch(s, tend=0.5, backend='dopri5', pulse_params=pulse, dw_rot=10,
-                 dw_rf=0, atol=1e-6, nsteps=1e5, B0=B0)
+    t, M = bloch(s, tend=0.1, backend='dopri5', pulse_params=pulse, dw_rot=0,
+                 dw_rf=0, rtol=1e-6, nsteps=1e5, B0=B0)
+
+
+# *** BENCHMARK: COMPARE ODE BACKENDS
+    # Mloop = []
+    # for be in ['vode', 'lsoda', 'dopri5', 'dop853']:
+    #     t, M = bloch(s, tend=0.1, backend=be, pulse_params=pulse, dw_rot=0,
+    #                  dw_rf=0, rtol=1e-6, nsteps=1e5, B0=B0)
+    #     Mloop.append(M)
 
 
 # *** EXAMPLE:  continuous excitation, M -> 2pi turn
     # pulse = {'TE': 20, 'TR': 50, 'amp': 1, 'pseq': 'continuous'}
     # t1 = 2*np.pi/s.gm/1
     # t, M = bloch(s, tend=t1, backend='vode', pulse_params=pulse, dw_rot=0,
-    #              atol=1e-6, nsteps=1e3, B0=B0)
+    #              rtol=1e-6, nsteps=1e3, B0=B0)
 
 # *** EXAMPLE: free precession, relaxed
     # pulse = {'pseq': 'none'}
     # s = spin(Minit=[0.7, 0, 0.8])
 # laboratory frame (insane)
     # t, M = bloch(s, backend='dopri5', tend=0.01, nsteps=1e4,
-    #              pulse_params=pulse, dw_rot=None, atol=1e-3, B0=3)
+    #              pulse_params=pulse, dw_rot=None, rtol=1e-3, B0=3)
 # rotating reference frame (sensible)
     # t, M = bloch(s, backend='vode', nsteps=1e3, pulse_params=pulse,
-    #              dw_rot=100, atol=1e-6, B0=3)
+    #              dw_rot=100, rtol=1e-6, B0=3)
 
 # ** BENCHMARK **  dopri5 (RK45): 1 loops, best of 3: 346 ms per loop
 #                    vode (ABF): 10 loops, best of 3: 77.1 ms per loop
