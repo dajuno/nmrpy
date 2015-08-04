@@ -226,12 +226,26 @@ if __name__ == '__main__':
         'TR': 1.000,
         'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
         'pseq': 'spinecho',
-        'dephase': 0.1
+        'dephase': 0
         }
     w0 = s['gm']*B0
-
-    t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
-                 dw_rf=0, rtol=1e-6, nsteps=1e5, B0=B0)
+    nsteps = 1e5
+    # t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
+                 # dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
+    # Mc = M[:,0] + 1j*M[:,1]
+# MANY SPINS EXPERIMENT
+    N = 10
+    dw_off = (np.random.rand(N) - 0.5)*200   # frequency shift between +-100 Hz
+    M = []
+    i = 0
+    Mc = np.zeros(nsteps, N)
+    for dw in dw_off:
+        print('\nrun %i/%i \t off resonance by %.2f Hz' % (i+1, len(dw_off), dw))
+        t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
+                     dw_rf=dw, rtol=1e-6, nsteps=1e5, B0=B0)
+        M.append(H)
+        Mc[:, i] = H[:, 0] + 1j*H[:, 1]
+        i += 1
 
 
 # *** BENCHMARK: COMPARE ODE BACKENDS
