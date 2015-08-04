@@ -85,7 +85,7 @@ def pulseseq(t, s, params, it):
             dB = 0
 
         if np.mod(t, TR) <= tp:  # 90° flip
-            Bp = B1*np.array([0, np.sin(w0*t), 0])
+            Bp = B1*np.array([np.cos(w0*t), 0, 0])
         elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
         elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
@@ -226,7 +226,7 @@ if __name__ == '__main__':
         'TR': 1.000,
         'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
         'pseq': 'spinecho',
-        'dephase': np.pi/6
+        'dephase': 0.1
         }
     w0 = s['gm']*B0
 
