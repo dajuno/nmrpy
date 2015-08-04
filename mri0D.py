@@ -78,8 +78,6 @@ def pulseseq(t, s, params, it):
         '''
         # pulse duration pi flip
         tp = np.pi/(2*B1*s['gm'])
-        # arbitrary dephasing
-        # let's say pi/6 during 2tp
         dt = TE/2
         if dphi > 0:
             dB = dphi/s['gm']/dt
@@ -87,7 +85,7 @@ def pulseseq(t, s, params, it):
             dB = 0
 
         if np.mod(t, TR) <= tp:  # 90° flip
-            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+            Bp = B1*np.array([0, np.sin(w0*t), 0])
         elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
         elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
@@ -115,14 +113,12 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     if dw_rot is None:
         dw_rot = -w0
     pulse_params['w0'] = dw_rot + dw_rf
-    print(w0)
 
     def rhs(t, y, s, pulse_params, B0, w0, dw_rot, it):
         B = np.array([0, 0, B0])                # static
         B = B + pulseseq(t, s, pulse_params, it)    # RF
         B = B + np.array([0, 0, (w0+dw_rot)/s['gm']])  # rotating frame with w+dw
         R = np.array([y[0]/s['T2'], y[1]/s['T2'], (y[2]-s['M0'])/s['T1']])  # relax
-        # print(s['gm']*np.cross(y, B))
         return s['gm']*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
@@ -141,7 +137,6 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
         sol.append(solver.y)
         it = it + 1
         progressbar(solver.t, tend, 'solve')
-        # print("%g/%g" % (solver.t, tend))
 
     return np.array(t), np.array(sol)
 
@@ -193,31 +188,35 @@ def plot_pulse(t, M, params, s):
     plt.draw()
 
     # plot pulse train
-    TE = params.get('TE')
-    TR = params.get('TR')
-    B1 = params.get('amp')
-    N = int(np.ceil(t[-1]/TR))   # number of periods
-    tp = np.pi/(2*B1*s['gm'])
-    # draw polygone of one period:
-    p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
-    tp1 = np.array([0, 0, tp, tp, tp+TE/2, tp+TE/2, TE/2+3*tp, TE/2+3*tp, TR])
-    p, tp = [], []
-    for i in range(N):
-        tp.extend(tp1+i*TR)
-        p.extend(p1)
+    if params.get('pseq') == 'spinecho':
+        TE = params.get('TE')
+        TR = params.get('TR')
+        B1 = params.get('amp')
+        N = int(np.ceil(t[-1]/TR))   # number of periods
+        tp = np.pi/(2*B1*s['gm'])
+        # draw polygone of one period:
+        p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
+        tp1 = np.array([0, 0, tp, tp, tp+TE/2, tp+TE/2, TE/2+3*tp, TE/2+3*tp,
+                        TR])
+        p, tp = [], []
+        for i in range(N):
+            tp.extend(tp1+i*TR)
+            p.extend(p1)
 
-    ax2.plot(tp, p)
-    ax2.set_ylim([-0.2, 1.2])
-    ax1.set_xlim([0, t.max()])
-    plt.draw()
+        ax2.plot(tp, p)
+        ax2.set_ylim([-0.2, 1.2])
+        ax1.set_xlim([0, t.max()])
+        plt.draw()
+
 
 if __name__ == '__main__':
+
     B0 = 3
 # spin dict
     s = {
         'M0': 1,
-        'T1': 0.100,
-        'T2': 0.600,
+        'T1': np.inf,   # 0.100,
+        'T2': np.inf,   # 0.600,
         'Minit': [0, 0, 1],
         'gm': 42.6e6
         }
@@ -225,13 +224,13 @@ if __name__ == '__main__':
     pulse = {
         'TE': 0.050,
         'TR': 1.000,
-        'amp': 1.75e-5,          # B1 = 1.75e-5 taken from Yuan1987
+        'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
         'pseq': 'spinecho',
-        'dephase': 0.1             # np.pi/6
+        'dephase': np.pi/6
         }
     w0 = s['gm']*B0
 
-    t, M = bloch(s, tend=0.1, backend='dopri5', pulse_params=pulse, dw_rot=0,
+    t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
                  dw_rf=0, rtol=1e-6, nsteps=1e5, B0=B0)
 
 
