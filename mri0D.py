@@ -79,7 +79,7 @@ def pulseseq(t, s, params, it):
         # pulse duration pi flip
         tp = np.pi/(2*B1*s['gm'])
         dt = TE/2
-        if dphi > 0:
+        if abs(dphi) > 0:
             dB = dphi/s['gm']/dt
         else:
             dB = 0
@@ -215,8 +215,8 @@ if __name__ == '__main__':
 # spin dict
     s = {
         'M0': 1,
-        'T1': np.inf,   # 0.100,
-        'T2': np.inf,   # 0.600,
+        'T1': 0.100,
+        'T2': 0.600,
         'Minit': [0, 0, 1],
         'gm': 42.6e6
         }
@@ -226,26 +226,33 @@ if __name__ == '__main__':
         'TR': 1.000,
         'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
         'pseq': 'spinecho',
-        'dephase': 0
+        'dephase': .0
         }
     w0 = s['gm']*B0
     nsteps = 1e5
-    # t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
-                 # dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
-    # Mc = M[:,0] + 1j*M[:,1]
-# MANY SPINS EXPERIMENT
-    N = 10
-    dw_off = (np.random.rand(N) - 0.5)*200   # frequency shift between +-100 Hz
-    M = []
-    i = 0
-    Mc = np.zeros(nsteps, N)
-    for dw in dw_off:
-        print('\nrun %i/%i \t off resonance by %.2f Hz' % (i+1, len(dw_off), dw))
-        t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
-                     dw_rf=dw, rtol=1e-6, nsteps=1e5, B0=B0)
-        M.append(H)
-        Mc[:, i] = H[:, 0] + 1j*H[:, 1]
-        i += 1
+    t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=100,
+                 dw_rf=-100, rtol=1e-6, nsteps=nsteps, B0=B0)
+    Mc = M[:, 0] + 1j*M[:, 1]
+
+# # MANY SPINS EXPERIMENT
+    # N = 10
+    # r = 2*np.random.rand(N) - 1
+    # dw_off = r*100   # frequency shift between +-100 Hz
+    # dphi = r*0.3
+
+    # var = dw_off # dphi  # dw_off
+
+    # M = []
+    # i = 0
+    # Mc = np.zeros((nsteps, N), dtype=complex)
+    # for x in var:
+    #     print('\nrun %i/%i \t shift %.2f' % (i+1, len(var), x))
+    #     # pulse['dephase'] = x
+    #     t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
+    #                  dw_rf=x, rtol=1e-6, nsteps=1e5, B0=B0)
+    #     M.append(H)
+    #     Mc[:, i] = H[:, 0] + 1j*H[:, 1]
+    #     i += 1
 
 
 # *** BENCHMARK: COMPARE ODE BACKENDS
