@@ -90,11 +90,11 @@ def pulseseq(t, s, params, it):
         dB = dphi/s['gm']/dt
 
         if np.mod(t, TR) <= tp:  # 90° flip
-            Bp = B1*np.array([np.cos(w0*t), 0, -db])
+            Bp = B1*np.array([np.cos(w0*t), 0, -dB])
         elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
         elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
-            Bp = B1*np.array([np.cos(w0*t), 0, -db])
+            Bp = B1*np.array([np.cos(w0*t), 0, -dB])
         else:
             Bp = np.array([0, 0, -dB])
     else:
@@ -235,11 +235,11 @@ if __name__ == '__main__':
         'TE': 0.050,
         'TR': 1.000,
         'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
-        'pseq': 'flip90',
+        'pseq': 'spinecho',
         'dephase': .1
         }
     w0 = s['gm']*B0
-    nsteps = 1e5
+    nsteps = 1e4
     # t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
     #              dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
     # Mc = M[:, 0] + 1j*M[:, 1]
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     N = 20
     r = 2*np.random.rand(N) - 1
     dw_off = r*100   # frequency shift between +-100 Hz
-    dphi = r*B0*0.5  # 0.1 = max 10% deviation
+    dphi = r*B0*0.5  # max angle (rad) of dephasing during TE/2
 
     var = dphi  # dw_off
 
