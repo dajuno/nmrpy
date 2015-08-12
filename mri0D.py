@@ -91,9 +91,11 @@ def pulseseq(t, s, params, it):
 
         if np.mod(t, TR) <= tp:  # 90° flip
             Bp = B1*np.array([np.cos(w0*t), 0, -dB])
-        elif np.mod(t, TR) <= tp + TE/2:  # dephase!
+        # elif np.mod(t, TR) <= tp + TE/2:  # dephase!
+        elif np.mod(t, TR) <= TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
-        elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
+        # elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
+        elif np.mod(t, TR) <= TE/2+2*tp:  # 180° flip
             Bp = B1*np.array([np.cos(w0*t), 0, -dB])
         else:
             Bp = np.array([0, 0, -dB])
@@ -239,7 +241,7 @@ if __name__ == '__main__':
         'dephase': .1
         }
     w0 = s['gm']*B0
-    nsteps = 1e4
+    nsteps = 2e4
     # t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
     #              dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
     # Mc = M[:, 0] + 1j*M[:, 1]
@@ -259,7 +261,7 @@ if __name__ == '__main__':
         print('\nrun %i/%i \t shift %.2f' % (i+1, len(var), x))
         pulse['dephase'] = x
         t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
-                     dw_rf=0, rtol=1e-6, nsteps=1e5, B0=B0)
+                     dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
         M.append(H)
         Mc[:, i] = H[:, 0] + 1j*H[:, 1]
         i += 1
