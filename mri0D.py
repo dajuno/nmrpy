@@ -58,8 +58,16 @@ def pulseseq(t, s, params, it):
 #    magnetization be dephased between P1 and P2 ?
 
     if pseq == 'flip90':
-        # nothing
-        print('90')
+        tp = np.pi/(2*B1*s['gm'])
+
+        dt = TE/2
+        dB = dphi/s['gm']/dt
+
+        if np.mod(t, TR) <= tp:  # 90° flip
+            Bp = B1*np.array([np.cos(w0*t), 0, -dB])
+        else:
+            Bp = np.array([0, 0, -dB])
+
     elif pseq == 'continuous':
         Bp = B1*np.array([np.cos(w0*t), 0, 0])
     elif pseq == 'pulsed':
@@ -79,17 +87,14 @@ def pulseseq(t, s, params, it):
         # pulse duration pi flip
         tp = np.pi/(2*B1*s['gm'])
         dt = TE/2
-        if abs(dphi) > 0:
-            dB = dphi/s['gm']/dt
-        else:
-            dB = 0
+        dB = dphi/s['gm']/dt
 
         if np.mod(t, TR) <= tp:  # 90° flip
-            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+            Bp = B1*np.array([np.cos(w0*t), 0, -db])
         elif np.mod(t, TR) <= tp + TE/2:  # dephase!
             Bp = np.array([0, 0, -dB])
         elif np.mod(t, TR) <= TE/2+3*tp:  # 180° flip
-            Bp = B1*np.array([np.cos(w0*t), 0, 0])
+            Bp = B1*np.array([np.cos(w0*t), 0, -db])
         else:
             Bp = np.array([0, 0, -dB])
     else:
@@ -188,16 +193,21 @@ def plot_pulse(t, M, params, s):
     plt.draw()
 
     # plot pulse train
-    if params.get('pseq') == 'spinecho':
+    pseq = params.get('pseq')
+    if pseq == 'spinecho' or pseq == 'flip90':
         TE = params.get('TE')
         TR = params.get('TR')
         B1 = params.get('amp')
         N = int(np.ceil(t[-1]/TR))   # number of periods
         tp = np.pi/(2*B1*s['gm'])
         # draw polygone of one period:
-        p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
-        tp1 = np.array([0, 0, tp, tp, tp+TE/2, tp+TE/2, TE/2+3*tp, TE/2+3*tp,
-                        TR])
+        if pseq == 'spinecho':
+            p1 = [0, 1, 1, 0, 0, 1, 1, 0, 0]
+            tp1 = np.array([0, 0, tp, tp, tp+TE/2, tp+TE/2, TE/2+3*tp,
+                            TE/2+3*tp, TR])
+        elif pseq == 'flip90':
+            p1 = [0, 1, 1, 0, 0]
+            tp1 = np.array([0, 0, tp, tp, TR])
         p, tp = [], []
         for i in range(N):
             tp.extend(tp1+i*TR)
@@ -225,34 +235,53 @@ if __name__ == '__main__':
         'TE': 0.050,
         'TR': 1.000,
         'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
-        'pseq': 'spinecho',
-        'dephase': .0
+        'pseq': 'flip90',
+        'dephase': .1
         }
     w0 = s['gm']*B0
     nsteps = 1e5
-    t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=100,
-                 dw_rf=-100, rtol=1e-6, nsteps=nsteps, B0=B0)
-    Mc = M[:, 0] + 1j*M[:, 1]
+    # t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
+    #              dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
+    # Mc = M[:, 0] + 1j*M[:, 1]
 
-# # MANY SPINS EXPERIMENT
-    # N = 10
-    # r = 2*np.random.rand(N) - 1
-    # dw_off = r*100   # frequency shift between +-100 Hz
-    # dphi = r*0.3
+# MANY SPINS EXPERIMENT
+    N = 20
+    r = 2*np.random.rand(N) - 1
+    dw_off = r*100   # frequency shift between +-100 Hz
+    dphi = r*B0*0.5  # 0.1 = max 10% deviation
 
-    # var = dw_off # dphi  # dw_off
+    var = dphi  # dw_off
 
-    # M = []
-    # i = 0
-    # Mc = np.zeros((nsteps, N), dtype=complex)
-    # for x in var:
-    #     print('\nrun %i/%i \t shift %.2f' % (i+1, len(var), x))
-    #     # pulse['dephase'] = x
-    #     t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
-    #                  dw_rf=x, rtol=1e-6, nsteps=1e5, B0=B0)
-    #     M.append(H)
-    #     Mc[:, i] = H[:, 0] + 1j*H[:, 1]
-    #     i += 1
+    M = []
+    i = 0
+    Mc = np.zeros((nsteps, N), dtype=complex)
+    for x in var:
+        print('\nrun %i/%i \t shift %.2f' % (i+1, len(var), x))
+        pulse['dephase'] = x
+        t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
+                     dw_rf=0, rtol=1e-6, nsteps=1e5, B0=B0)
+        M.append(H)
+        Mc[:, i] = H[:, 0] + 1j*H[:, 1]
+        i += 1
+
+    M = np.array(M)
+# integrate Mt to get signal
+
+    def plot_cplx(t, Mc):
+        plt.figure()
+        plt.ion()
+        plt.plot(t, np.real(Mc), '-', t, np.imag(Mc), ':')
+
+    def plot_signal(t, M):
+        signal = np.sum(M, 0)[:, 0:2]
+        plt.figure()
+        plt.ion()
+        plt.plot(t, signal)
+        plt.plot(t, signal[:, 0]+signal[:, 1])
+        plt.legend(('x', 'y', 'sum'))
+
+        
+        
 
 
 # *** BENCHMARK: COMPARE ODE BACKENDS
