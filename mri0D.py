@@ -17,7 +17,6 @@ relax: T1, T2 relaxation terms '''
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.integrate import ode
 from utils import progressbar
 # import warning
@@ -124,8 +123,10 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     def rhs(t, y, s, pulse_params, B0, w0, dw_rot, it):
         B = np.array([0, 0, B0])                # static
         B = B + pulseseq(t, s, pulse_params, it)    # RF
-        B = B + np.array([0, 0, (w0+dw_rot)/s['gm']])  # rotating frame with w+dw
-        R = np.array([y[0]/s['T2'], y[1]/s['T2'], (y[2]-s['M0'])/s['T1']])  # relax
+        # rotating frame with w+dw
+        B = B + np.array([0, 0, (w0+dw_rot)/s['gm']])
+        # relax
+        R = np.array([y[0]/s['T2'], y[1]/s['T2'], (y[2]-s['M0'])/s['T1']])
         return s['gm']*np.cross(y, B) - R
 
     ''' VAR 1 ##   automatic step size control '''
@@ -148,7 +149,8 @@ def bloch(s, tend=1, nsteps=1000, backend='vode', pulse_params={},
     return np.array(t), np.array(sol)
 
 
-def plot3Dtime(t, M, skip=10):
+def plot_3Dtime(t, M, skip=10):
+    from mpl_toolkits.mplot3d import Axes3D
     import time
     plt.ion()
     fig = plt.figure()
@@ -237,17 +239,17 @@ if __name__ == '__main__':
         'TE': 0.050,
         'TR': 1.000,
         'amp': 1.75e-5,         # B1 = 1.75e-5 taken from Yuan1987
-        'pseq': 'spinecho',
+        'pseq': 'flip90',
         'dephase': .1
         }
     w0 = s['gm']*B0
-    nsteps = 2e4
+    nsteps = 1e3
     # t, M = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
     #              dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
     # Mc = M[:, 0] + 1j*M[:, 1]
 
 # MANY SPINS EXPERIMENT
-    N = 20
+    N = 100
     r = 2*np.random.rand(N) - 1
     dw_off = r*100   # frequency shift between +-100 Hz
     dphi = r*B0*0.5  # max angle (rad) of dephasing during TE/2
@@ -260,8 +262,8 @@ if __name__ == '__main__':
     for x in var:
         print('\nrun %i/%i \t shift %.2f' % (i+1, len(var), x))
         pulse['dephase'] = x
-        t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse, dw_rot=0,
-                     dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
+        t, H = bloch(s, tend=0.2, backend='dopri5', pulse_params=pulse,
+                     dw_rot=0, dw_rf=0, rtol=1e-6, nsteps=nsteps, B0=B0)
         M.append(H)
         Mc[:, i] = H[:, 0] + 1j*H[:, 1]
         i += 1
@@ -276,14 +278,15 @@ if __name__ == '__main__':
 
     def plot_signal(t, M):
         signal = np.sum(M, 0)[:, 0:2]
-        plt.figure()
+        fig = plt.figure()
         plt.ion()
         plt.plot(t, signal)
-        plt.plot(t, signal[:, 0]+signal[:, 1])
+        plt.plot(t, signal[:, 0]+signal[:, 1], ':')
         plt.legend(('x', 'y', 'sum'))
-
-        
-        
+        ax = fig.gca()
+        ylim = ax.get_ylim()
+        TE = pulse['TE']
+        plt.plot([TE, TE], [ylim[0], ylim[1]], '-.k')
 
 
 # *** BENCHMARK: COMPARE ODE BACKENDS
